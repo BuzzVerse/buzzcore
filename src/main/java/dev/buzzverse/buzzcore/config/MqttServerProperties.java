@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Configuration;
 
 @Data
 @Configuration
-@ConfigurationProperties(prefix = "grpc.server")
-public class GrpcServerProperties {
-    private String applicationId;
-    private String apiKey;
-    private String host;
-    private int port;
+@ConfigurationProperties(prefix = "mqtt")
+public class MqttServerProperties {
+    private String serverUri;
+    private String clientId;
+    private String username;
+    private String password;
 }
