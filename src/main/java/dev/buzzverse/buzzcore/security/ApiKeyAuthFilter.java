@@ -24,8 +24,6 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         String headerValue = request.getHeader("X-API-KEY");
-        System.out.println("Received API Key: " + headerValue);
-        System.out.println("Expected API Key: " + apiKey);
         if (headerValue == null || !headerValue.equals(apiKey)) {
             response.sendError(HttpStatus.UNAUTHORIZED.value(), "Invalid or missing API Key");
             return;
