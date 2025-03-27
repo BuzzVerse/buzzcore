@@ -22,6 +22,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        String path = request.getRequestURI();
+
+        if (!path.startsWith("/events")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String headerValue = request.getHeader("X-API-KEY");
         if (headerValue == null || !headerValue.equals(apiKey)) {

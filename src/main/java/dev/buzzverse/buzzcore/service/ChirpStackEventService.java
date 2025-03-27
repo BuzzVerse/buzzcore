@@ -1,6 +1,5 @@
 package dev.buzzverse.buzzcore.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import dev.buzzverse.buzzcore.BuzzVerse_V1_BME280.BME280Data;
@@ -8,6 +7,9 @@ import dev.buzzverse.buzzcore.BuzzVerse_V1_Chirpstack.StatusEvent;
 import dev.buzzverse.buzzcore.BuzzVerse_V1_Chirpstack.UplinkEvent;
 import dev.buzzverse.buzzcore.BuzzVerse_V1_Chirpstack.UplinkRxInfo;
 import dev.buzzverse.buzzcore.BuzzVerse_V1_Packet.Packet;
+import dev.buzzverse.buzzcore.client.InfluxDBClientManager;
+import dev.buzzverse.buzzcore.model.BME280Measurement;
+import dev.buzzverse.buzzcore.model.BatteryMeasurement;
 import dev.buzzverse.buzzcore.model.ChirpStackEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,108 +17,78 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChirpStackEventService {
 
-    private final MqttClientService mqttClientService;
+    private final InfluxDBClientManager influxManager;
 
-    public void handleEvent(ChirpStackEvent event, byte[] requestBody) {
+    public void handleEvent(final ChirpStackEvent event, final byte[] requestBody) {
         try {
             switch (event) {
-                case UP:
-                    handleUplinkEvent(requestBody);
-                    break;
-                case STATUS:
-                    handleStatusEvent(requestBody);
-                    break;
-                default:
+                case UP -> handleUplinkEvent(requestBody);
+                case STATUS -> handleStatusEvent(requestBody);
+                default -> {
                     log.error("Unknown event type: {}", event);
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown event type");
+                }
             }
-        } catch (Exception e) {
+        } catch (final InvalidProtocolBufferException e) {
+            log.error("Error parsing protobuf data", e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error parsing protobuf data", e);
+        } catch (final Exception e) {
             log.error("Error while handling event", e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error while handling event");
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error while handling event", e);
         }
     }
 
-    private void handleUplinkEvent(byte[] requestBody) {
-        try {
-            UplinkEvent uplinkEvent = UplinkEvent.parseFrom(requestBody);
-            String devEui = uplinkEvent.getDeviceInfo().getDevEui();
-            log.info("Received uplink event from device: {}", devEui);
+    private void handleUplinkEvent(final byte[] requestBody) throws InvalidProtocolBufferException {
+        final UplinkEvent uplinkEvent = UplinkEvent.parseFrom(requestBody);
+        final String devEui = uplinkEvent.getDeviceInfo().getDevEui();
+        log.info("Received uplink event from device: {}", devEui);
 
-            ByteString payload = uplinkEvent.getData();
+        final ByteString payload = uplinkEvent.getData();
+        final Packet packet = Packet.parseFrom(payload);
 
-            Packet packet = Packet.parseFrom(payload);
+        if (uplinkEvent.getRxInfoList().isEmpty()) {
+            log.warn("No RxInfo available for device: {}", devEui);
+            return;
+        }
 
-            UplinkRxInfo uplinkRxInfo = uplinkEvent.getRxInfoList().get(0);
-            Integer rssi = uplinkRxInfo.getRssi();
-            Float snr = uplinkRxInfo.getSnr();
+        final UplinkRxInfo uplinkRxInfo = uplinkEvent.getRxInfoList().get(0);
 
-            if (packet.hasBme280()) {
-                BME280Data bme280Data = packet.getBme280();
-                processAndPublish(bme280Data, rssi, snr, devEui);
-            }
+        if (packet.hasBme280()) {
+            final BME280Data bme280Data = packet.getBme280();
+            final BME280Measurement measurement = BME280Measurement.builder()
+                    .deviceEui(devEui)
+                    .rssi(uplinkRxInfo.getRssi())
+                    .snr(uplinkRxInfo.getSnr())
+                    .temperature(bme280Data.getTemperature())
+                    .humidity(bme280Data.getHumidity())
+                    .pressure(bme280Data.getPressure())
+                    .build();
 
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Error while parsing protobuf", e);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error while parsing protobuf");
+            log.info("Saving BME280 measurement: {}", measurement);
+            influxManager.writeMeasurement(measurement);
         }
     }
 
+    private void handleStatusEvent(final byte[] requestBody) throws InvalidProtocolBufferException {
+        final StatusEvent statusEvent = StatusEvent.parseFrom(requestBody);
+        final String devEui = statusEvent.getDeviceInfo().getDevEui();
+        log.info("Received status event from device: {}", devEui);
 
-    private void handleStatusEvent(byte[] requestBody) {
-        try {
-            StatusEvent statusEvent = StatusEvent.parseFrom(requestBody);
-            String devEui = statusEvent.getDeviceInfo().getDevEui();
+        final boolean isExternalPower = statusEvent.getExternalPowerSource();
+        final float batteryLevel = statusEvent.getBatteryLevel();
 
-            Boolean isExternalPower = statusEvent.getExternalPowerSource();
-            Boolean isBatteryLevelUnavailable = statusEvent.getBatteryLevelUnavailable();
-            Float battery = statusEvent.getBatteryLevel();
+        final BatteryMeasurement measurement = BatteryMeasurement.builder()
+                .deviceEui(devEui)
+                .isExternalPower(isExternalPower)
+                .batteryLevel(batteryLevel)
+                .build();
 
-            log.info("Received status event from device: {}", devEui);
-            log.info("External power source: {}", isExternalPower);
-            log.info("Battery level unavailable: {}", isBatteryLevelUnavailable);
-            log.info("Battery level: {}", battery);
-
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Error while parsing protobuf", e);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error while parsing protobuf");
-        }
-    }
-
-    private void processAndPublish(BME280Data bme280Data, Integer rssi, Float snr, String devEui) {
-        try {
-            Map<String, Object> payload = buildPayload(bme280Data, rssi, snr);
-            String jsonPayload = new ObjectMapper().writeValueAsString(payload);
-            mqttClientService.publish(jsonPayload, "sensors/" + devEui + "/data");
-        } catch (Exception e) {
-            log.error("Error while processing and publishing data", e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error while processing and publishing data");
-        }
-    }
-
-    private Map<String, Object> buildPayload(BME280Data bme280Data, Integer rssi, Float snr) {
-        int temperature = bme280Data.getTemperature();
-        int pressure = bme280Data.getPressure() + 1000;
-        int humidity = bme280Data.getHumidity();
-
-        log.info("Temperature: {}°C, Humidity: {}%, Pressure: {} hPa", temperature, humidity, pressure);
-
-        return Map.of(
-                "BME280", Map.of(
-                        "temperature", temperature,
-                        "humidity", humidity,
-                        "pressure", pressure
-                ),
-                "META", Map.of(
-                        "rssi", rssi,
-                        "snr", snr
-                )
-        );
+        log.info("Saving battery measurement: {}", measurement);
+        influxManager.writeMeasurement(measurement);
     }
 }

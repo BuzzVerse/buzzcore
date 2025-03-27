@@ -20,6 +20,7 @@ public class WebSecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable);
 
         http.authorizeHttpRequests(auth -> auth
+                .requestMatchers("/measurements/**").permitAll()
                 .requestMatchers("/events/**").authenticated()
                 .anyRequest().permitAll()
         );
