@@ -1,16 +1,19 @@
 package dev.buzzverse.buzzcore.utils;
 
+import dev.buzzverse.buzzcore.model.MeasurementParameters;
+
 import java.time.Instant;
 
 public final class InfluxUtils {
 
     private InfluxUtils() {}
 
-    public static String buildFluxQuery(String measurement,
-                                        Instant startTime,
-                                        Instant endTime,
-                                        String deviceEui,
-                                        boolean latest) {
+    public static String buildFluxQuery(String measurement, MeasurementParameters params) {
+        Instant startTime = params.getStartTime();
+        Instant endTime = params.getEndTime();
+        String deviceEui = params.getDeviceEui();
+        boolean latest = params.isLatest();
+
         StringBuilder flux = new StringBuilder("""
         from(bucket: "BuzzNode")
           |> range(start: %s, stop: %s)

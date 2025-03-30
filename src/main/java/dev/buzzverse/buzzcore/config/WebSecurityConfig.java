@@ -4,6 +4,7 @@ import dev.buzzverse.buzzcore.security.ApiKeyAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
@@ -20,7 +21,7 @@ public class WebSecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable);
 
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/measurements/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/measurements/**").permitAll()
                 .requestMatchers("/events/**").authenticated()
                 .anyRequest().permitAll()
         );

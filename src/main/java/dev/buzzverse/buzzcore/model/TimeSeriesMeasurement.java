@@ -1,17 +1,14 @@
 package dev.buzzverse.buzzcore.model;
 
 import com.influxdb.annotations.Column;
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Instant;
 
-@Getter
-@Setter
-@ToString
+@Data
 @SuperBuilder
-@NoArgsConstructor
-@AllArgsConstructor
 public abstract class TimeSeriesMeasurement {
 
     @Column(timestamp = true)
