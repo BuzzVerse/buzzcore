@@ -20,7 +20,7 @@ public class InfluxDBClientManager {
     public InfluxDBClientManager(InfluxDbProperties properties) {
         InfluxDBClientOptions options = InfluxDBClientOptions.builder()
                 .url(properties.getUrl())
-                .authenticate(properties.getUsername(), properties.getPassword().toCharArray())
+                .authenticateToken(properties.getToken().toCharArray())
                 .org(properties.getOrg())
                 .bucket(properties.getBucket())
                 .logLevel(LogLevel.BASIC)

@@ -9,8 +9,7 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "influx")
 public class InfluxDbProperties {
     private String url;
-    private String username;
-    private String password;
+    private String token;
     private String org;
     private String bucket;
 }
