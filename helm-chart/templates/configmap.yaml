@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "buzzcore.fullname" . }}-config
+  namespace: {{ .Values.namespace }}
+data:
+  INFLUX_URL: {{ .Values.influxdb.url }}
+  INFLUX_ORG: {{ .Values.influxdb.org }}
+  INFLUX_BUCKET: {{ .Values.influxdb.bucket }}
