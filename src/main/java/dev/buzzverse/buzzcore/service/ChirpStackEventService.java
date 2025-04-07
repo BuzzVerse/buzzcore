@@ -60,13 +60,14 @@ public class ChirpStackEventService {
 
         if (packet.hasBme280()) {
             final BME280Data bme280Data = packet.getBme280();
+            final int pressure = bme280Data.getPressure() + 1000;
             final BME280Measurement measurement = BME280Measurement.builder()
                     .deviceEui(devEui)
                     .rssi(uplinkRxInfo.getRssi())
                     .snr(uplinkRxInfo.getSnr())
                     .temperature(bme280Data.getTemperature())
                     .humidity(bme280Data.getHumidity())
-                    .pressure(bme280Data.getPressure())
+                    .pressure(pressure)
                     .build();
 
             log.info("Saving BME280 measurement: {}", measurement);
